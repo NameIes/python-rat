@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block main %}
+<div class="container mt-5" id="usersWrapper">
+  <div class="modal fade" id="responseModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="responseModalData">
+          <table class="table mt-3" v-if="tasks.length">
+            <thead>
+              <tr>
+                <th scope="col">Image</th>
+                <th scope="col">Name</th>
+                <th scope="col">PID</th>
+                <th scope="col">Session</th>
+                <th scope="col">Name</th>
+                <th scope="col">Mem Usage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="task in tasks">
+                <th scope="row">[[ task[0] ]]</th>
+                <td>[[ task[1] ]]</td>
+                <td>[[ task[2] ]]</td>
+                <td>[[ task[3] ]]</td>
+                <td>[[ task[4] ]]</td>
+                <td>[[ task[5] ]]</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="scModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <img :src="sc_url" alt="Screenshot" class="w-100">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h1>Active computers</h1>
+      <hr>
+      <table class="table mt-3" v-if="users_list.length">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">PC Name</th>
+            <th scope="col">Activity</th>
+            <th scope="col">IP</th>
+            <th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(user, index) in users_list">
+            <th scope="row">[[ index ]]</th>
+            <td>[[ user.pc_name ]]</td>
+            <td>[[ user.activity ]]</td>
+            <td>[[ user.ip ]]</td>
+            <td class="d-flex justify-content-end">
+              <button class="btn btn-sm btn-primary me-3" @click="getTasklist(user.id)">Show tasklist</button>
+              <button class="btn btn-sm btn-primary" @click="getScreenshot(user.id)">Take screenshot</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h2 v-else>No users connected.</h2>
+    </div>
+  </div>
+</div>
+{% endblock main %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock extra_js %}
