@@ -58,27 +58,39 @@
 
   <div class="card">
     <div class="card-body">
-      <h1>Active computers</h1>
+      <h1>Observable computers</h1>
       <hr>
       <table class="table mt-3" v-if="users_list.length">
         <thead>
           <tr>
             <th scope="col">#</th>
             <th scope="col">PC Name</th>
-            <th scope="col">Activity</th>
+            <th scope="col">Connect time</th>
             <th scope="col">IP</th>
-            <th scope="col"></th>
+            <th scope="col">Is active</th>
+            <th scope="col">Current active window</th>
+            <th scope="col">
+              <p class="text-center mb-0">
+                Actions
+              </p>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(user, index) in users_list">
+          <tr v-for="(user, index) in users_list" :key="user.id">
             <th scope="row">[[ index ]]</th>
             <td>[[ user.pc_name ]]</td>
-            <td>[[ user.activity ]]</td>
+            <td>[[ user.connect_time ]]</td>
             <td>[[ user.ip ]]</td>
-            <td class="d-flex justify-content-end">
-              <button class="btn btn-sm btn-primary me-3" @click="getTasklist(user.id)">Show tasklist</button>
-              <button class="btn btn-sm btn-primary" @click="getScreenshot(user.id)">Take screenshot</button>
+            <td>
+              <span class="badge rounded-circle p-1" v-bind:class="[ user.is_active ? 'text-bg-success' : 'text-bg-danger' ]">
+                <span class="visually-hidden">New alerts</span>
+              </span>
+            </td>
+            <td>[[ user.current_activity ]]</td>
+            <td class="d-flex justify-content-center">
+              <button class="btn btn-sm btn-primary me-3" v-bind:class="{ 'disabled': !user.is_active }" @click="getTasklist(user.id)">Show tasklist</button>
+              <button class="btn btn-sm btn-primary" v-bind:class="{ 'disabled': !user.is_active }" @click="getScreenshot(user.id)">Take screenshot</button>
             </td>
           </tr>
         </tbody>

@@ -10,6 +10,7 @@ let app = new Vue({
     users_list: [],
     tasks: [],
     sc_url: '',
+    activity_timeout: null,
   },
   methods: {
     sendCommand: function (data) {
@@ -30,15 +31,31 @@ let app = new Vue({
       })
     },
 
+    getActive: function (user_id) {
+      this.sendCommand({
+        id: user_id,
+        command: 'send_ping',
+      })
+    },
+
     onUserConnected: function (data) {
       `
       id: int       - User id
       command: str  - Command to execute 'connect'
       pc_name: str  - Name of client PC
-      activity: str - PC startup time
+      connect_time: str - PC startup time
       ip: str       - Client IP address
       `
       delete data.command;
+      data.is_active = true;
+      data.current_activity = 'Connected';
+      data.last_activity = Date.now();
+      for (let i = 0; i < this.users_list.length; i++) {
+        if (this.users_list[i].id === data.id) {
+          this.$set(this.users_list, i, data);
+          return;
+        };
+      };
       this.users_list.push(data);
     },
 
@@ -49,7 +66,8 @@ let app = new Vue({
       `
       for (let i = 0; i < this.users_list.length; i++) {
         if (this.users_list[i].id === data.id) {
-          this.users_list.splice(i, 1);
+          this.users_list[i].is_active = false;
+          this.users_list[i].current_activity = 'Disconnected';
           return;
         };
       };
@@ -61,9 +79,9 @@ let app = new Vue({
       command: str        - Command to execute 'screenshot_sended'
       screenshot_url: str - URL of screenshot
       `
+      this.sc_url = data.screenshot_url;
       const responseModal = new bootstrap.Modal(document.getElementById('scModal'));
       responseModal.show();
-      this.sc_url = data.screenshot_url;
     },
 
     onTasklistSended: function (data) {
@@ -85,12 +103,58 @@ let app = new Vue({
       this.tasks = result;
     },
 
+    onPingSended: function (data) {
+      `
+      id: int      - User id
+      command: str - Command to execute 'ping_sended'
+      `
+      for (let i = 0; i < this.users_list.length; i++) {
+        if (this.users_list[i].id === data.id) {
+          data = this.users_list[i];
+          data.is_active = true;
+          data.last_activity = Date.now();
+          this.$set(this.users_list, i, data);
+          return;
+        };
+      };
+    },
+
+    onActivitySended: function (data) {
+      `
+      id: int      - User id
+      command: str - Command to execute 'activity_sended'
+      activity: str - Activity
+      `
+      if (this.activity_timeout) clearTimeout(this.activity_timeout);
+
+      for (let i = 0; i < this.users_list.length; i++) {
+        if (this.users_list[i].id === data.id) {
+          let ndata = this.users_list[i];
+          ndata.is_active = true;
+          ndata.current_activity = data.activity;
+          ndata.last_activity = Date.now();
+          this.$set(this.users_list, i, ndata);
+          this.activity_timeout = setTimeout(() => {
+            const delta = Math.floor((Date.now() - this.users_list[i].last_activity) / 1000);
+
+            if (delta > 10) {
+              this.users_list[i].is_active = false;
+              this.users_list[i].current_activity = 'Disconnected';
+            };
+          }, 11000);
+          return;
+        };
+      };
+    },
+
     parseCommand: function (data) {
       let commands = {
         'connect': (data) => this.onUserConnected(data),
         'disconnect': (data) => this.onUserDisconnected(data),
         'screenshot_sended': (data) => this.onScreenshotSended(data),
         'tasklist_sended': (data) => this.onTasklistSended(data),
+        'ping_sended': (data) => this.onPingSended(data),
+        'activity_sended': (data) => this.onActivitySended(data),
       };
 
       data = JSON.parse(data);
@@ -111,6 +175,12 @@ let app = new Vue({
       url: '/get_observables/',
     }).then((response) => {
       this.users_list = response.data;
+      for (let i = 0; i < this.users_list.length; i++) {
+        this.users_list[i].is_active = false;
+        this.users_list[i].current_activity = 'Nothing';
+        this.users_list[i].last_activity = Date.now();
+        this.getActive(this.users_list[i].id);
+      };
     });
   },
 });

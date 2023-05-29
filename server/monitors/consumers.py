@@ -14,6 +14,9 @@ class CommandConsumer(WebsocketConsumer):
             'send_screenshot': self.send_screenshot,
             'tasklist_sended': self.tasklist_sended,
             'screenshot_sended': self.screenshot_sended,
+            'send_ping': self.send_ping,
+            'ping_sended': self.ping_sended,
+            'activity_sended': self.activity_sended,
         }
 
         super().__init__(*args, **kwargs)
@@ -39,7 +42,7 @@ class CommandConsumer(WebsocketConsumer):
           id: int       - User id
           command: str  - Command to execute 'connect'
           pc_name: str  - Name of client PC
-          activity: str - PC startup time
+          connect_time: str - PC startup time
           ip: str       - Client IP address
         """
 
@@ -48,7 +51,7 @@ class CommandConsumer(WebsocketConsumer):
             'id': request['id'],
             'command': request['command'],
             'pc_name': observable.pc_name,
-            'activity': observable.activity.strftime("%m/%d/%Y, %H:%M:%S"),
+            'connect_time': observable.connect_time.strftime("%m/%d/%Y, %H:%M:%S"),
             'ip': observable.ip,
         }
 
@@ -65,10 +68,18 @@ class CommandConsumer(WebsocketConsumer):
           command: str - Command to execute 'disconnect'
         """
 
-        try:
-            Observable.objects.get(id=request['id']).delete()
-        except Observable.DoesNotExist:
-            pass
+        self.send(text_data=json.dumps(request))
+
+    def send_ping(self, request):
+        """
+        Request data:
+          id: int      - User id
+          command: str - Command to execute 'send_ping'
+
+        Responce data:
+          id: int      - User id
+          command: str - Command to execute 'send_ping'
+        """
 
         self.send(text_data=json.dumps(request))
 
@@ -113,6 +124,21 @@ class CommandConsumer(WebsocketConsumer):
 
         self.send(text_data=json.dumps(request))
 
+    def activity_sended(self, request):
+        """
+        Request data:
+          id: int       - User id
+          command: str  - Command to execute 'activity_sended'
+          activity: str - Activity
+
+        Responce data:
+          id: int       - User id
+          command: str  - Command to execute 'activity_sended'
+          activity: str - Activity
+        """
+
+        self.send(text_data=json.dumps(request))
+
     def screenshot_sended(self, request):
         """
         Request data:
@@ -124,6 +150,19 @@ class CommandConsumer(WebsocketConsumer):
           id: int             - User id
           command: str        - Command to execute 'screenshot_sended'
           screenshot_url: str - URL of screenshot
+        """
+
+        self.send(text_data=json.dumps(request))
+
+    def ping_sended(self, request):
+        """
+        Request data:
+          id: int            - User id
+          command: str       - Command to execute 'ping_sended'
+
+        Responce data:
+          id: int             - User id
+          command: str        - Command to execute 'ping_sended'
         """
 
         self.send(text_data=json.dumps(request))

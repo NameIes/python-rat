@@ -18,17 +18,17 @@ def get_id(request):
 
     data = json.loads(request.body.decode('utf-8'))
 
-    obj = Observable(
+    obj = Observable.objects.get_or_create(
         ip=ip,
         pc_name=data['pc_name'],
-    )
+    )[0]
     obj.save()
 
     return JsonResponse({
         'id': obj.id,
         'command': 'connect',
         'pc_name': obj.pc_name,
-        'activity': obj.activity.strftime("%m/%d/%Y, %H:%M:%S"),
+        'connect_time': obj.connect_time.strftime("%m/%d/%Y, %H:%M:%S"),
         'ip': obj.ip,
     })
 
@@ -40,7 +40,7 @@ def get_observables(request):
             'id': obj.id,
             'command': 'connect',
             'pc_name': obj.pc_name,
-            'activity': obj.activity.strftime("%m/%d/%Y, %H:%M:%S"),
+            'connect_time': obj.connect_time.strftime("%m/%d/%Y, %H:%M:%S"),
             'ip': obj.ip,
         })
 

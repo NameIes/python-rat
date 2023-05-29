@@ -7,11 +7,12 @@ const FormData = require('form-data');
 const fs = require('fs');
 const exec = require('child_process').exec;
 
+
 const SERVER_URL = '127.0.0.1:8000';
 
 let CURRENT_ID = null;
 let PC_NAME = null;
-let ACTIVITY = null;
+let connect_time = null;
 let CURRENT_IP = null;
 
 const createWindow = () => {
@@ -31,7 +32,7 @@ function setCurrentID(connect_websocket) {
   }).then((response) => {
     CURRENT_ID = response.data.id;
     PC_NAME = response.data.pc_name;
-    ACTIVITY = response.data.activity;
+    connect_time = response.data.connect_time;
     CURRENT_IP = response.data.ip;
     connect_websocket();
   }).catch((err) => {
@@ -57,9 +58,48 @@ function connectWebSocket() {
   ws.addEventListener('open', function () {
     sendConnectRequest(ws);
 
+    setInterval(() => {grabCurrentActiveWindow(ws)}, 10000);
+
     app.on('will-quit', () => {
       sendDisconnectRequest(ws);
     });
+  });
+};
+
+function grabCurrentActiveWindow(ws) {
+  let command = `
+Add-Type  @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class APIFuncs
+  {
+  [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+  public static extern int GetWindowText(IntPtr hwnd,StringBuilder
+lpString, int cch);
+  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+  public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+      public static extern Int32 GetWindowThreadProcessId(IntPtr hWnd,out
+Int32 lpdwProcessId);
+  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+      public static extern Int32 GetWindowTextLength(IntPtr hWnd);
+  }
+"@
+
+$w = [apifuncs]::GetForegroundWindow()
+$len = [apifuncs]::GetWindowTextLength($w)
+$sb = New-Object text.stringbuilder -ArgumentList ($len + 1)
+$rtnlen = [apifuncs]::GetWindowText($w,$sb,$sb.Capacity)
+write-host "$($sb.tostring())"
+  `;
+  exec(command, {'shell': 'powershell'}, (err, stdout, stderr) => {
+    const response = {
+      id: CURRENT_ID,
+      command: 'activity_sended',
+      activity: stdout
+    };
+    ws.send(JSON.stringify(response));
   });
 };
 
@@ -68,7 +108,7 @@ function sendConnectRequest(ws) {
     id: CURRENT_ID,
     command: 'connect',
     pc_name: PC_NAME,
-    activity: ACTIVITY,
+    connect_time: connect_time,
     ip: CURRENT_IP,
   };
 
@@ -85,8 +125,9 @@ function sendDisconnectRequest(ws) {
 };
 
 const commands = {
-  'send_tasklist': (data) => sendTasklistRequest(data),
-  'send_screenshot': (data) => sendScreenshotRequest(data),
+  'send_tasklist': (ws, data) => sendTasklistRequest(ws, data),
+  'send_screenshot': (ws, data) => sendScreenshotRequest(ws, data),
+  'send_ping': (ws, data) => sendPingRequest(ws, data),
 };
 
 function parseResponse(ws, response) {
@@ -94,6 +135,14 @@ function parseResponse(ws, response) {
   if (data.id === CURRENT_ID & data.command in commands) {
     commands[data.command](ws, data);
   }
+};
+
+function sendPingRequest(ws, data) {
+  const response = {
+    id: CURRENT_ID,
+    command: 'ping_sended',
+  };
+  ws.send(JSON.stringify(response));
 };
 
 function sendTasklistRequest(ws, data) {
@@ -111,27 +160,26 @@ function sendScreenshotRequest(ws, data) {
   screenshot("screenshot.png", function(error, complete) {
     if(error)
         console.log("Screenshot failed", error);
-    else
-        console.log("Screenshot succeeded");
-  });
+    else {
+      let fdata = new FormData();
+      fdata.append('file', fs.createReadStream('screenshot.png'));
 
-  let fdata = new FormData();
-  fdata.append('file', fs.createReadStream('screenshot.png'));
-
-  axios.post(`http://${SERVER_URL}/save_picture/`, fdata, {
-    headers: {
-      'accept': 'application/json',
-      'Accept-Language': 'en-US,en;q=0.8',
-      'Content-Type': `multipart/form-data; boundary=${fdata._boundary}`,
-    }
-  }).then(function (response) {
-    console.log(response.data.sc_url);
-    const result = {
-      id: CURRENT_ID,
-      command: 'screenshot_sended',
-      screenshot_url: response.data.sc_url,
+      axios.post(`http://${SERVER_URL}/save_picture/`, fdata, {
+        headers: {
+          'accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.8',
+          'Content-Type': `multipart/form-data; boundary=${fdata._boundary}`,
+        }
+      }).then(function (response) {
+        console.log(response.data.sc_url);
+        const result = {
+          id: CURRENT_ID,
+          command: 'screenshot_sended',
+          screenshot_url: response.data.sc_url,
+        };
+        ws.send(JSON.stringify(result));
+      });
     };
-    ws.send(JSON.stringify(result));
   });
 };
 
