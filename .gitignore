@@ -489,4 +489,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# RAT
+screenshot.png
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,git,visualstudiocode,python,django,venv,node,vue,vuejs

