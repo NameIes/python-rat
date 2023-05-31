@@ -1,5 +1,7 @@
 # Python RAT
-A simple application for tracking clients activity, with the ability to take screenshots and view a list of tasks.
+[This repo](https://github.com/NameIes/python-rat)
+
+A simple client/server application for tracking clients activity, with the ability to take screenshots and view a list of tasks.
 
 ## Server
 Web application written in Python and the django framework.
