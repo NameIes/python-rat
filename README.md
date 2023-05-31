@@ -27,7 +27,7 @@ For configuring, change parameters at the bottom of `main.js`.
 
 `show_window` - `boolean` - If `true` show a window for quick closing during development.
 
-`enable_autoload` - 'boolean' - Add application to startup.
+`enable_autoload` - `boolean` - Add application to startup.
 ### Start application without building
 ```
 npm start
